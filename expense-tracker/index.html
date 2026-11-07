@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpendWise – Personal Expense Tracker</title>
+  <meta name="description" content="Track your income and expenses, set budgets and understand your spending. Your data stays in your browser.">
+
+  <!-- Apply the saved theme before the page paints (prevents a light-mode flash) -->
+  <script>
+    try {
+      var saved = JSON.parse(localStorage.getItem('spendwise.v1'));
+      if (saved && saved.settings && saved.settings.theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (e) { /* storage unavailable – default light theme */ }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- ============ Sidebar ============ -->
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <span class="brand-logo"><span class="icon" data-icon="wallet"></span></span>
+        <span class="brand-name">SpendWise</span>
+      </div>
+
+      <nav class="nav">
+        <a href="#dashboard" class="nav-link" data-page="dashboard"><span class="icon" data-icon="grid"></span><span>Dashboard</span></a>
+        <a href="#add" class="nav-link" data-page="add"><span class="icon" data-icon="plus-circle"></span><span>Add Transaction</span></a>
+        <a href="#history" class="nav-link" data-page="history"><span class="icon" data-icon="list"></span><span>History</span></a>
+        <a href="#budget" class="nav-link" data-page="budget"><span class="icon" data-icon="target"></span><span>Budget</span></a>
+        <a href="#reports" class="nav-link" data-page="reports"><span class="icon" data-icon="bar-chart"></span><span>Reports</span></a>
+        <a href="#settings" class="nav-link" data-page="settings"><span class="icon" data-icon="sliders"></span><span>Settings</span></a>
+      </nav>
+
+      <p class="sidebar-note">Your data is saved privately in this browser.</p>
+    </aside>
+    <div class="overlay" id="overlay"></div>
+
+    <!-- ============ Main area ============ -->
+    <div class="main">
+      <header class="topbar">
+        <button type="button" class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu"><span class="icon" data-icon="menu"></span></button>
+        <h1 id="pageTitle">Dashboard</h1>
+        <div class="topbar-actions">
+          <button type="button" class="icon-btn" id="themeToggle" aria-label="Switch to dark mode" title="Toggle light / dark mode"></button>
+          <a href="#add" class="btn btn-primary btn-sm"><span class="icon" data-icon="plus"></span><span class="btn-text">Add</span></a>
+        </div>
+      </header>
+
+      <main class="content">
+
+        <!-- ---------- Dashboard ---------- -->
+        <section class="page" id="page-dashboard">
+          <div class="alert" id="budgetAlert" role="alert" hidden></div>
+
+          <div class="stats-grid">
+            <article class="card stat-card">
+              <span class="stat-icon purple"><span class="icon" data-icon="wallet"></span></span>
+              <div>
+                <p class="stat-label">Total Balance</p>
+                <h2 class="stat-value" id="statBalance">0</h2>
+              </div>
+            </article>
+            <article class="card stat-card">
+              <span class="stat-icon green"><span class="icon" data-icon="trending-up"></span></span>
+              <div>
+                <p class="stat-label">Total Income</p>
+                <h2 class="stat-value" id="statIncome">0</h2>
+              </div>
+            </article>
+            <article class="card stat-card">
+              <span class="stat-icon red"><span class="icon" data-icon="trending-down"></span></span>
+              <div>
+                <p class="stat-label">Total Expenses</p>
+                <h2 class="stat-value" id="statExpense">0</h2>
+              </div>
+            </article>
+          </div>
+
+          <div class="grid-2">
+            <article class="card">
+              <div class="card-head"><h3>Monthly Expenses</h3><span class="muted">Last 6 months</span></div>
+              <div class="chart-box"><canvas id="monthlyExpenseChart"></canvas><p class="chart-msg" hidden></p></div>
+            </article>
+            <article class="card">
+              <div class="card-head"><h3>Income vs Expense</h3><span class="muted">All time</span></div>
+              <div class="chart-box"><canvas id="incomeExpenseChart"></canvas><p class="chart-msg" hidden></p></div>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="card-head"><h3>Recent Transactions</h3><a href="#history" class="link">View all</a></div>
+            <ul class="recent-list" id="recentList"></ul>
+            <div class="empty" id="recentEmpty" hidden>
+              <span class="empty-icon"><span class="icon" data-icon="inbox"></span></span>
+              <p>No transactions yet.</p>
+              <a href="#add" class="btn btn-primary btn-sm">Add your first transaction</a>
+            </div>
+          </article>
+        </section>
+
+        <!-- ---------- Add / Edit Transaction ---------- -->
+        <section class="page" id="page-add" hidden>
+          <article class="card form-card">
+            <div class="card-head"><h3 id="formTitle">New Transaction</h3></div>
+
+            <form id="transactionForm" novalidate>
+              <div class="type-toggle" role="radiogroup" aria-label="Transaction type">
+                <label class="type-option expense"><input type="radio" name="type" value="expense" checked><span><span class="icon" data-icon="trending-down"></span>Expense</span></label>
+                <label class="type-option income"><input type="radio" name="type" value="income"><span><span class="icon" data-icon="trending-up"></span>Income</span></label>
+              </div>
+
+              <div class="form-grid">
+                <div class="field">
+                  <label for="title">Title</label>
+                  <input type="text" id="title" maxlength="60" placeholder="e.g. Grocery shopping" autocomplete="off">
+                  <small class="error" id="titleError"></small>
+                </div>
+
+                <div class="field">
+                  <label for="amount">Amount</label>
+                  <input type="number" id="amount" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+                  <small class="error" id="amountError"></small>
+                </div>
+
+                <div class="field">
+                  <label for="category">Category</label>
+                  <select id="category"></select>
+                  <small class="error" id="categoryError"></small>
+                </div>
+
+                <div class="field">
+                  <label for="date">Date</label>
+                  <input type="date" id="date" min="2000-01-01" max="2100-12-31">
+                  <small class="error" id="dateError"></small>
+                </div>
+
+                <div class="field">
+                  <label for="payment">Payment method</label>
+                  <select id="payment"></select>
+                  <small class="error" id="paymentError"></small>
+                </div>
+
+                <div class="field full">
+                  <label for="description">Description <span class="optional">(optional)</span></label>
+                  <textarea id="description" rows="3" maxlength="200" placeholder="Add a short note…"></textarea>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="saveBtn">Save Transaction</button>
+                <button type="button" class="btn btn-ghost" id="cancelBtn">Clear</button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <!-- ---------- Transaction History ---------- -->
+        <section class="page" id="page-history" hidden>
+          <article class="card">
+            <div class="filters">
+              <div class="search-box">
+                <span class="icon" data-icon="search"></span>
+                <input type="search" id="searchInput" placeholder="Search title, category, note…" aria-label="Search transactions">
+              </div>
+              <select id="filterType" aria-label="Filter by type">
+                <option value="all">All types</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+              <select id="filterCategory" aria-label="Filter by category"></select>
+              <label class="date-filter"><span>From</span><input type="date" id="filterFrom"></label>
+              <label class="date-filter"><span>To</span><input type="date" id="filterTo"></label>
+              <select id="sortOrder" aria-label="Sort order">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+              <button type="button" class="btn btn-ghost btn-sm" id="resetFilters">Reset</button>
+            </div>
+
+            <p class="result-count" id="resultCount"></p>
+
+            <div class="table-wrap">
+              <table class="table" id="historyTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Payment</th>
+                    <th class="num">Amount</th>
+                    <th class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="historyBody"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="historyEmpty" hidden>
+              <span class="empty-icon"><span class="icon" data-icon="inbox"></span></span>
+              <p id="historyEmptyText">No transactions found.</p>
+            </div>
+          </article>
+        </section>
+
+        <!-- ---------- Budget ---------- -->
+        <section class="page" id="page-budget" hidden>
+          <div class="grid-2">
+            <article class="card">
+              <div class="card-head"><h3>Monthly Budget</h3><span class="muted" id="budgetMonthLabel"></span></div>
+              <form id="budgetForm" novalidate>
+                <div class="field">
+                  <label for="budgetInput">Budget amount</label>
+                  <input type="number" id="budgetInput" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 20000">
+                  <small class="error" id="budgetError"></small>
+                </div>
+                <p class="hint">This budget applies to every month. Enter 0 to remove it.</p>
+                <button type="submit" class="btn btn-primary">Save Budget</button>
+              </form>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><h3>This Month</h3><span class="badge" id="budgetBadge"></span></div>
+              <div class="budget-stats">
+                <div><p class="stat-label">Budget</p><p class="mini-value" id="budgetTotal">0</p></div>
+                <div><p class="stat-label">Spent</p><p class="mini-value" id="budgetSpent">0</p></div>
+                <div><p class="stat-label">Remaining</p><p class="mini-value" id="budgetRemaining">0</p></div>
+              </div>
+              <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="budgetProgress">
+                <div class="progress-bar" id="budgetBar"></div>
+              </div>
+              <div class="progress-meta"><span id="budgetPercent">0%</span><span id="budgetNote"></span></div>
+              <div class="alert alert-danger" id="budgetWarning" role="alert" hidden></div>
+            </article>
+          </div>
+        </section>
+
+        <!-- ---------- Reports ---------- -->
+        <section class="page" id="page-reports" hidden>
+          <article class="card toolbar-card">
+            <div class="field inline">
+              <label for="reportPeriod">Period</label>
+              <select id="reportPeriod"></select>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="downloadCsv"><span class="icon" data-icon="download"></span>Download CSV</button>
+          </article>
+
+          <div class="stats-grid">
+            <article class="card stat-card">
+              <span class="stat-icon green"><span class="icon" data-icon="trending-up"></span></span>
+              <div><p class="stat-label">Income</p><h2 class="stat-value" id="repIncome">0</h2></div>
+            </article>
+            <article class="card stat-card">
+              <span class="stat-icon red"><span class="icon" data-icon="trending-down"></span></span>
+              <div><p class="stat-label">Expenses</p><h2 class="stat-value" id="repExpense">0</h2></div>
+            </article>
+            <article class="card stat-card">
+              <span class="stat-icon purple"><span class="icon" data-icon="wallet"></span></span>
+              <div><p class="stat-label">Net Savings</p><h2 class="stat-value" id="repNet">0</h2></div>
+            </article>
+          </div>
+
+          <div class="grid-2">
+            <article class="card">
+              <div class="card-head"><h3>Expenses by Category</h3></div>
+              <div class="chart-box small"><canvas id="categoryChart"></canvas><p class="chart-msg" hidden></p></div>
+              <ul class="breakdown" id="categoryList"></ul>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <h3>Spending Trend</h3>
+                <div class="segmented" role="tablist" aria-label="Trend range">
+                  <button type="button" class="seg-btn active" data-range="weekly" role="tab" aria-selected="true">Weekly</button>
+                  <button type="button" class="seg-btn" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
+                </div>
+              </div>
+              <div class="chart-box"><canvas id="trendChart"></canvas><p class="chart-msg" hidden></p></div>
+              <p class="muted trend-note" id="trendNote"></p>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="card-head"><h3>Monthly Summary</h3><span class="muted">Most recent 12 months with activity</span></div>
+            <div class="table-wrap">
+              <table class="table" id="summaryTable">
+                <thead>
+                  <tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Net</th></tr>
+                </thead>
+                <tbody id="summaryBody"></tbody>
+              </table>
+            </div>
+            <div class="empty" id="summaryEmpty" hidden>
+              <span class="empty-icon"><span class="icon" data-icon="inbox"></span></span>
+              <p>No data to summarise yet.</p>
+            </div>
+          </article>
+        </section>
+
+        <!-- ---------- Settings ---------- -->
+        <section class="page" id="page-settings" hidden>
+          <article class="card settings-card">
+            <div class="setting-row">
+              <div>
+                <h4>Currency</h4>
+                <p class="muted">Used to display all amounts. Saved amounts are not converted.</p>
+              </div>
+              <select id="currencySelect" aria-label="Currency"></select>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <h4>Dark mode</h4>
+                <p class="muted">Switch between the light and dark theme.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="darkToggle" aria-label="Dark mode">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <h4>Clear all data</h4>
+                <p class="muted">Permanently deletes every transaction and your budget. Currency and theme are kept.</p>
+              </div>
+              <button type="button" class="btn btn-danger btn-sm" id="clearDataBtn"><span class="icon" data-icon="trash"></span>Clear Data</button>
+            </div>
+          </article>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Confirmation dialog (used for delete and clear data) -->
+  <div class="modal" id="confirmModal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMessage">
+      <span class="modal-icon"><span class="icon" data-icon="alert"></span></span>
+      <h3 id="modalTitle">Are you sure?</h3>
+      <p id="modalMessage"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="modalCancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="modalConfirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
+
+  <!-- Chart.js (needs an internet connection the first time; everything else works offline) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
